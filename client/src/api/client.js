@@ -1,4 +1,12 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+function resolveApiBase() {
+  const raw = (import.meta.env.VITE_API_URL || '/api').trim().replace(/\/+$/, '');
+  if (raw.startsWith('http') && !raw.endsWith('/api')) {
+    return `${raw}/api`;
+  }
+  return raw || '/api';
+}
+
+const API_BASE = resolveApiBase();
 
 export async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('smart_eb_token');

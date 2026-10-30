@@ -45,6 +45,28 @@ const statusHistorySchema = new mongoose.Schema(
   { _id: false }
 );
 
+const feedbackSchema = new mongoose.Schema(
+  {
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      required: true
+    },
+    comment: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: ''
+    },
+    submittedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  { _id: false }
+);
+
 const geoPointSchema = new mongoose.Schema(
   {
     type: {
@@ -114,6 +136,10 @@ const complaintSchema = new mongoose.Schema(
     isHazardous: {
       type: Boolean,
       default: false
+    },
+    feedback: {
+      type: feedbackSchema,
+      default: undefined
     },
     statusHistory: {
       type: [statusHistorySchema],

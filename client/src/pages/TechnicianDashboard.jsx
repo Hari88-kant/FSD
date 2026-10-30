@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 
 const NEXT_STATUS_BY_CURRENT = {
   accepted: [
@@ -22,6 +23,8 @@ const REJECTION_REASONS = [
 
 export default function TechnicianDashboard() {
   const { user, technicianProfile, setTechnicianProfile } = useAuth();
+  const { playHapticSound } = useTheme();
+
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -32,6 +35,8 @@ export default function TechnicianDashboard() {
     technicianProfile?.location?.coordinates?.[0] ?? 77.6602
   );
   const [locMessage, setLocMessage] = useState('');
+  const [filterQuery, setFilterQuery] = useState('');
+  const [copiedId, setCopiedId] = useState('');
 
   // Rejection modal states
   const [rejectModalComplaint, setRejectModalComplaint] = useState(null);
@@ -62,6 +67,7 @@ export default function TechnicianDashboard() {
   }, []);
 
   async function handleToggleAvailability() {
+    playHapticSound('toggle');
     try {
       const nextState = !(technicianProfile?.isAvailable ?? true);
       const data = await apiRequest('/technicians/me/availability', {
@@ -76,6 +82,7 @@ export default function TechnicianDashboard() {
 
   async function handleUpdateLocation(e) {
     e.preventDefault();
+    playHapticSound('click');
     setLocMessage('');
     try {
       const data = await apiRequest('/technicians/me/location', {
@@ -87,12 +94,14 @@ export default function TechnicianDashboard() {
       });
       setTechnicianProfile(data.technicianProfile);
       setLocMessage('Location updated in MongoDB GeoJSON [lng, lat] format.');
+      playHapticSound('success');
     } catch (err) {
       setError(err.message);
     }
   }
 
   function handleBrowserGps() {
+    playHapticSound('click');
     if (!navigator.geolocation) {
       setLocMessage('Browser geolocation unavailable.');
       return;
@@ -110,6 +119,7 @@ export default function TechnicianDashboard() {
           });
           setTechnicianProfile(data.technicianProfile);
           setLocMessage(`GPS location updated (${lat}, ${lng})`);
+          playHapticSound('success');
         } catch (err) {
           setError(err.message);
         }
@@ -121,6 +131,7 @@ export default function TechnicianDashboard() {
   }
 
   async function handleAccept(id) {
+    playHapticSound('success');
     try {
       await apiRequest(`/complaints/${id}/accept`, { method: 'POST' });
       await loadComplaints();
@@ -130,6 +141,7 @@ export default function TechnicianDashboard() {
   }
 
   function openRejectModal(complaint) {
+    playHapticSound('hazard');
     setRejectModalComplaint(complaint);
     setSelectedReason(REJECTION_REASONS[0].label);
     setCustomNote('');
@@ -145,6 +157,7 @@ export default function TechnicianDashboard() {
     e.preventDefault();
     if (!rejectModalComplaint) return;
     setRejecting(true);
+    playHapticSound('click');
     try {
       const finalReason =
         selectedReason.includes('Other') && customNote.trim()
@@ -156,6 +169,7 @@ export default function TechnicianDashboard() {
         body: JSON.stringify({ reason: finalReason, note: finalReason })
       });
       closeRejectModal();
+      playHapticSound('toggle');
       await loadComplaints();
     } catch (err) {
       setError(err.message);
@@ -164,6 +178,7 @@ export default function TechnicianDashboard() {
   }
 
   async function handleTransition(id, nextStatus) {
+    playHapticSound(nextStatus === 'resolved' ? 'success' : 'click');
     try {
       await apiRequest(`/complaints/${id}`, {
         method: 'PATCH',
@@ -178,7 +193,27 @@ export default function TechnicianDashboard() {
     }
   }
 
+  function copyToClipboard(text) {
+    navigator.clipboard?.writeText(text);
+    setCopiedId(text);
+    playHapticSound('click');
+    setTimeout(() => setCopiedId(''), 2000);
+  }
+
   const isAvailable = technicianProfile?.isAvailable ?? true;
+
+  const filteredComplaints = complaints.filter((c) => {
+    if (!filterQuery.trim()) return true;
+    const q = filterQuery.toLowerCase();
+    return (
+      c.problemType.toLowerCase().includes(q) ||
+      (c.description && c.description.toLowerCase().includes(q)) ||
+      (c.address && c.address.toLowerCase().includes(q)) ||
+      (c.status && c.status.toLowerCase().includes(q)) ||
+      (c.customerId?.name && c.customerId.name.toLowerCase().includes(q)) ||
+      c._id.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="container">
@@ -187,12 +222,17 @@ export default function TechnicianDashboard() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <h2 style={{ margin: 0, letterSpacing: '-0.02em' }}>Technician Field Operations</h2>
-            <span className="tech-id-badge tech-id-badge-lg" title="Official Field Technician ID">
+            <span
+              className="tech-id-badge tech-id-badge-lg"
+              title="Click to copy your Field ID"
+              style={{ cursor: 'pointer' }}
+              onClick={() => copyToClipboard(technicianBadgeId)}
+            >
               🪪 ID: {technicianBadgeId}
             </span>
           </div>
           <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.92rem' }}>
-            Logged in as <strong>{user?.name}</strong> • Authorized for Smart EB Connect Field Dispatch
+            Logged in as <strong>{user?.name}</strong> • Karnataka Grid Dispatch
           </p>
         </div>
 
@@ -202,10 +242,10 @@ export default function TechnicianDashboard() {
               padding: '0.4rem 0.85rem',
               borderRadius: '999px',
               fontSize: '0.85rem',
-              fontWeight: 700,
-              background: isAvailable ? '#dcfce7' : '#fee2e2',
-              color: isAvailable ? '#15803d' : '#b91c1c',
-              border: `1.5px solid ${isAvailable ? '#86efac' : '#fca5a5'}`
+              fontWeight: 800,
+              background: isAvailable ? 'var(--success-bg)' : 'var(--danger-bg)',
+              color: isAvailable ? 'var(--success-text)' : 'var(--danger-text)',
+              border: `1.5px solid ${isAvailable ? 'var(--success-border)' : 'var(--danger-border)'}`
             }}
           >
             {isAvailable ? '🟢 AVAILABLE FOR DISPATCH' : '🔴 OFFLINE / BUSY'}
@@ -213,15 +253,21 @@ export default function TechnicianDashboard() {
         </div>
       </div>
 
+      {copiedId && (
+        <div style={{ padding: '0.4rem 0.8rem', background: 'var(--badge-tech-bg)', color: 'var(--primary)', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '1rem', fontWeight: 600 }}>
+          ✓ Copied {copiedId} to clipboard!
+        </div>
+      )}
+
       {error && <div className="hazard-alert">{error}</div>}
 
-      {/* Workload Logic Explanation Card (Requirement 3) */}
-      <div className="card" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)', border: '1.5px solid #bfdbfe' }}>
-        <h4 style={{ margin: '0 0 0.35rem 0', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+      {/* Workload Logic Guidance Banner */}
+      <div className="card" style={{ background: 'var(--card-bg-alt)', border: '1.5px solid var(--card-border)' }}>
+        <h4 style={{ margin: '0 0 0.35rem 0', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <span>ℹ️</span> Workload & Response Protocol
         </h4>
-        <p style={{ margin: 0, fontSize: '0.88rem', color: '#1e3a8a', lineHeight: 1.5 }}>
-          <strong>When you are free:</strong> Click <strong>Accept</strong> to confirm dispatch and take ownership of the complaint.
+        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
+          <strong>When you are free:</strong> Click <strong>Accept Job</strong> to confirm dispatch and take ownership of the complaint.
           <br />
           <strong>When you have active work / busy:</strong> Click <strong>Reject</strong> and choose your reason. This immediately releases the complaint back into the dispatch pool so another nearby technician or admin can respond without delay to the customer.
         </p>
@@ -229,16 +275,16 @@ export default function TechnicianDashboard() {
 
       <div className="grid-2">
         {/* Availability Toggle */}
-        <div className="card" style={{ boxShadow: 'var(--shadow-sm)' }}>
+        <div className="card" style={{ boxShadow: 'var(--card-shadow)' }}>
           <h3 style={{ marginTop: 0 }}>Dispatch Status Control</h3>
-          <p style={{ fontSize: '0.92rem', color: '#475569' }}>
+          <p style={{ fontSize: '0.92rem', color: 'var(--text-muted)' }}>
             Set your field availability so customers and dispatchers know whether you can accept incoming fault reports.
           </p>
           <div style={{ marginTop: '1rem' }}>
             <button
               type="button"
               className={`btn ${isAvailable ? 'btn-danger' : 'btn-success'}`}
-              style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem' }}
+              style={{ width: '100%', padding: '0.8rem', fontSize: '0.95rem' }}
               onClick={handleToggleAvailability}
             >
               {isAvailable ? '⏹️ Set Status: Unavailable / In Active Repair' : '▶️ Set Status: Available for New Requests'}
@@ -247,9 +293,9 @@ export default function TechnicianDashboard() {
         </div>
 
         {/* Location Coordinates */}
-        <div className="card" style={{ boxShadow: 'var(--shadow-sm)' }}>
+        <div className="card" style={{ boxShadow: 'var(--card-shadow)' }}>
           <h3 style={{ marginTop: 0 }}>Active Field Coordinates</h3>
-          <p style={{ fontSize: '0.88rem', color: '#475569' }}>
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
             Your coordinates are used to calculate straight-line Haversine distance to customer outages.
           </p>
           <form onSubmit={handleUpdateLocation} style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
@@ -279,35 +325,47 @@ export default function TechnicianDashboard() {
             </button>
           </form>
           {locMessage && (
-            <p style={{ fontSize: '0.82rem', color: '#16a34a', marginTop: '0.5rem', fontWeight: 600 }}>
+            <p style={{ fontSize: '0.82rem', color: 'var(--success)', marginTop: '0.5rem', fontWeight: 600 }}>
               ✓ {locMessage}
             </p>
           )}
         </div>
       </div>
 
-      {/* Service Requests Table */}
-      <div className="card" style={{ boxShadow: 'var(--shadow-md)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+      {/* Service Requests Table with Real-Time Search */}
+      <div className="card" style={{ boxShadow: 'var(--card-shadow)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>🛠️</span> Assigned & Available Service Requests ({complaints.length})
+              <span>🛠️</span> Assigned & Available Service Requests ({filteredComplaints.length} of {complaints.length})
             </h3>
             <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
               Manage your queue: Accept when available, or Reject if occupied to auto-reassign
             </span>
           </div>
-          <button type="button" className="btn btn-secondary" style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }} onClick={loadComplaints}>
-            🔄 Refresh Queue
-          </button>
+
+          <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="🔍 Filter requests..."
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', width: '200px' }}
+            />
+            <button type="button" className="btn btn-secondary" style={{ fontSize: '0.82rem', padding: '0.4rem 0.75rem' }} onClick={loadComplaints}>
+              🔄 Refresh
+            </button>
+          </div>
         </div>
 
         {loading ? (
           <p>Loading assigned service requests...</p>
-        ) : complaints.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '2.5rem', color: '#64748b' }}>
+        ) : filteredComplaints.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
             <span style={{ fontSize: '2.2rem' }}>🎉</span>
-            <p style={{ margin: '0.5rem 0 0 0', fontWeight: 600 }}>No pending or assigned requests in your queue right now.</p>
+            <p style={{ margin: '0.5rem 0 0 0', fontWeight: 600 }}>
+              {complaints.length === 0 ? 'No pending or assigned requests in your queue right now.' : 'No requests match your search query.'}
+            </p>
           </div>
         ) : (
           <div className="table-wrap">
@@ -322,14 +380,14 @@ export default function TechnicianDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {complaints.map((c) => {
+                {filteredComplaints.map((c) => {
                   const isMine = c.technicianId?._id === user.id || c.technicianId === user.id;
                   const nextActions = isMine ? NEXT_STATUS_BY_CURRENT[c.status] || [] : [];
 
                   return (
                     <tr key={c._id}>
                       <td>
-                        <div style={{ fontWeight: 600 }}>{new Date(c.createdAt).toLocaleDateString()}</div>
+                        <div style={{ fontWeight: 700 }}>{new Date(c.createdAt).toLocaleDateString()}</div>
                         <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                           {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
@@ -337,15 +395,15 @@ export default function TechnicianDashboard() {
                       <td>
                         <strong>{c.customerId?.name || 'Customer'}</strong>
                         {c.customerId?.phone && (
-                          <div style={{ fontSize: '0.8rem', color: '#2563eb' }}>📞 {c.customerId.phone}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>📞 {c.customerId.phone}</div>
                         )}
-                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{c.customerId?.email}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{c.customerId?.email}</div>
                       </td>
                       <td style={{ maxWidth: '280px' }}>
                         <strong style={{ textTransform: 'capitalize' }}>{c.problemType.replace(/_/g, ' ')}</strong>
-                        <div style={{ fontSize: '0.88rem', color: '#334155' }}>{c.description}</div>
+                        <div style={{ fontSize: '0.88rem' }}>{c.description}</div>
                         {c.address && (
-                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>📍 {c.address}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>📍 {c.address}</div>
                         )}
                       </td>
                       <td>
@@ -372,7 +430,7 @@ export default function TechnicianDashboard() {
                             </button>
                           )}
 
-                          {/* Reject Button with Workload Reason Dialog (Requirement 3) */}
+                          {/* Reject Button with Workload Reason Dialog */}
                           {isMine && ['assigned', 'accepted'].includes(c.status) && (
                             <button
                               type="button"
@@ -408,14 +466,14 @@ export default function TechnicianDashboard() {
         )}
       </div>
 
-      {/* Reject Reason Modal (Requirement 3) */}
+      {/* Reject Reason Modal */}
       {rejectModalComplaint && (
         <div className="modal-overlay">
           <div className="modal-dialog">
-            <h3 style={{ marginTop: 0, color: '#991b1b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <h3 style={{ marginTop: 0, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span>⚠️</span> Decline / Release Service Request
             </h3>
-            <p style={{ fontSize: '0.9rem', color: '#475569', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
               Technician <strong>{user?.name}</strong> (<code>{technicianBadgeId}</code>):
               <br />
               If you have other urgent work or cannot respond in time, select your reason below. This will immediately release the complaint back to the pending queue for re-dispatch.
@@ -430,7 +488,10 @@ export default function TechnicianDashboard() {
                   <div
                     key={reason.id}
                     className={`rejection-reason-option ${selectedReason === reason.label ? 'selected' : ''}`}
-                    onClick={() => setSelectedReason(reason.label)}
+                    onClick={() => {
+                      setSelectedReason(reason.label);
+                      playHapticSound('click');
+                    }}
                   >
                     <input
                       type="radio"
@@ -440,7 +501,7 @@ export default function TechnicianDashboard() {
                       onChange={() => setSelectedReason(reason.label)}
                       style={{ width: 'auto', marginTop: '0.2rem' }}
                     />
-                    <label htmlFor={reason.id} style={{ fontSize: '0.88rem', cursor: 'pointer', margin: 0, fontWeight: 550 }}>
+                    <label htmlFor={reason.id} style={{ fontSize: '0.88rem', cursor: 'pointer', margin: 0, fontWeight: 600 }}>
                       {reason.label}
                     </label>
                   </div>

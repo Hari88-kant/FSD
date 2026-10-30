@@ -23,6 +23,11 @@ export const assignComplaintSchema = z.object({
   technicianId: z.string().min(1, 'technicianId is required')
 });
 
+export const submitFeedbackSchema = z.object({
+  rating: z.number().min(1).max(5),
+  comment: z.string().trim().max(500).optional().default('')
+});
+
 const VALID_TECH_TRANSITIONS = {
   accepted: ['on_the_way', 'in_progress'],
   on_the_way: ['in_progress'],
@@ -407,6 +412,99 @@ export async function rejectComplaint(req, res, next) {
       .populate('technicianId', 'name email phone role technicianBadgeId');
 
     return sendSuccess(res, { complaint: updated, rejectionReason: reason });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function submitFeedback(req, res, next) {
+  try {
+    const { rating, comment } = req.body;
+    const complaint = await Complaint.findById(req.params.id);
+    if (!complaint) {
+      throw new AppError(404, 'COMPLAINT_NOT_FOUND', 'Complaint not found');
+    }
+
+    if (complaint.customerId.toString() !== req.user.id) {
+      throw new AppError(403, 'FORBIDDEN', 'Only the complaint owner can submit a service rating');
+    }
+
+    if (complaint.status !== 'resolved') {
+      throw new AppError(400, 'NOT_RESOLVED', 'Ratings can only be submitted for resolved complaints');
+    }
+
+    complaint.feedback = {
+      rating,
+      comment,
+      submittedAt: new Date()
+    };
+
+    complaint.statusHistory.push({
+      status: 'resolved',
+      changedBy: req.user.id,
+      note: `Customer rated service ${rating} stars${comment ? `: "${comment}"` : ''}`
+    });
+
+    await complaint.save();
+
+    if (complaint.technicianId) {
+      const allRatedComplaints = await Complaint.find({
+        technicianId: complaint.technicianId,
+        'feedback.rating': { $exists: true }
+      });
+      if (allRatedComplaints.length > 0) {
+        const avg =
+          allRatedComplaints.reduce((acc, c) => acc + (c.feedback?.rating || 5), 0) /
+          allRatedComplaints.length;
+        await TechnicianProfile.updateOne(
+          { userId: complaint.technicianId },
+          { rating: Number(avg.toFixed(1)) }
+        );
+      }
+    }
+
+    const updated = await Complaint.findById(complaint._id)
+      .populate('customerId', 'name email phone')
+      .populate('technicianId', 'name email phone role technicianBadgeId');
+
+    return sendSuccess(res, { complaint: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getLiveActivityFeed(req, res, next) {
+  try {
+    const recent = await Complaint.find({ status: { $ne: 'cancelled' } })
+      .populate('technicianId', 'name technicianBadgeId')
+      .sort({ updatedAt: -1 })
+      .limit(8);
+
+    const feed = recent.map((c) => {
+      const area = c.address ? c.address.split(',')[0] : 'Karnataka Grid';
+      const lastAction = c.statusHistory?.[c.statusHistory.length - 1];
+      const techBadge = c.technicianId?.technicianBadgeId || (c.technicianId ? 'EB-TECH' : null);
+
+      return {
+        id: c._id,
+        problemType: c.problemType,
+        status: c.status,
+        area,
+        technicianBadgeId: techBadge,
+        note: lastAction?.note || `Complaint in ${c.status.replace(/_/g, ' ')} state`,
+        timestamp: c.updatedAt
+      };
+    });
+
+    return sendSuccess(res, {
+      feed,
+      gridStatus: {
+        frequencyHz: 50.02,
+        state: 'STABLE',
+        activeZone: 'Karnataka Southern Hub (Anekal / Electronic City)',
+        timestamp: new Date().toISOString()
+      }
+    });
   } catch (err) {
     next(err);
   }

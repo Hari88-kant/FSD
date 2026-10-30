@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
+import { useTheme } from '../context/ThemeContext.jsx';
 
 export default function AdminDashboard() {
   const [summary, setSummary] = useState(null);
   const [complaints, setComplaints] = useState([]);
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [userQuery, setUserQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [copiedId, setCopiedId] = useState('');
+
+  const { playHapticSound } = useTheme();
 
   async function loadAdminData() {
     setLoading(true);
@@ -33,11 +39,13 @@ export default function AdminDashboard() {
 
   async function handleAssignTech(complaintId, technicianId) {
     if (!technicianId) return;
+    playHapticSound('click');
     try {
       await apiRequest(`/complaints/${complaintId}/assign`, {
         method: 'POST',
         body: JSON.stringify({ technicianId })
       });
+      playHapticSound('success');
       await loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -45,20 +53,55 @@ export default function AdminDashboard() {
   }
 
   async function handleToggleUserActive(userId, currentActive) {
+    playHapticSound('toggle');
     try {
       await apiRequest(`/admin/users/${userId}`, {
         method: 'PATCH',
         body: JSON.stringify({ isActive: !currentActive })
       });
+      playHapticSound('success');
       await loadAdminData();
     } catch (err) {
       setError(err.message);
     }
   }
 
+  function copyToClipboard(text) {
+    navigator.clipboard?.writeText(text);
+    setCopiedId(text);
+    playHapticSound('click');
+    setTimeout(() => setCopiedId(''), 2000);
+  }
+
   const counts = summary?.counts || {};
   const technicians = summary?.technicians || [];
   const users = summary?.users || [];
+
+  const filteredComplaints = complaints.filter((c) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      c.problemType.toLowerCase().includes(q) ||
+      (c.description && c.description.toLowerCase().includes(q)) ||
+      (c.address && c.address.toLowerCase().includes(q)) ||
+      (c.status && c.status.toLowerCase().includes(q)) ||
+      (c.customerId?.name && c.customerId.name.toLowerCase().includes(q)) ||
+      (c.technicianId?.name && c.technicianId.name.toLowerCase().includes(q)) ||
+      (c.technicianId?.technicianBadgeId && c.technicianId.technicianBadgeId.toLowerCase().includes(q)) ||
+      c._id.toLowerCase().includes(q)
+    );
+  });
+
+  const filteredUsers = users.filter((u) => {
+    if (!userQuery.trim()) return true;
+    const q = userQuery.toLowerCase();
+    return (
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      u.role.toLowerCase().includes(q) ||
+      (u.technicianBadgeId && u.technicianBadgeId.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div className="container">
@@ -66,7 +109,7 @@ export default function AdminDashboard() {
         <div>
           <h2 style={{ margin: '0 0 0.25rem 0', letterSpacing: '-0.02em' }}>Administrator Command & Monitoring</h2>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.92rem' }}>
-            System-wide grid oversight, technician employee badge monitoring, and manual dispatch intervention.
+            System-wide grid telemetry, technician badge tracking, and active dispatch management.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -75,6 +118,12 @@ export default function AdminDashboard() {
           </span>
         </div>
       </div>
+
+      {copiedId && (
+        <div style={{ padding: '0.4rem 0.8rem', background: 'var(--badge-tech-bg)', color: 'var(--primary)', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '1rem', fontWeight: 600 }}>
+          ✓ Copied {copiedId} to clipboard!
+        </div>
+      )}
 
       {error && <div className="hazard-alert">{error}</div>}
 
@@ -103,7 +152,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Complaints Management Card */}
-      <div className="card" style={{ boxShadow: 'var(--shadow-md)' }}>
+      <div className="card" style={{ boxShadow: 'var(--card-shadow)' }}>
         <div
           style={{
             display: 'flex',
@@ -116,22 +165,29 @@ export default function AdminDashboard() {
         >
           <div>
             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>📋</span> All Grid Complaints ({complaints.length})
+              <span>📋</span> All Grid Complaints ({filteredComplaints.length} of {complaints.length})
             </h3>
             <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
-              Dispatch and monitor service progress across all customer reports
+              Dispatch, assign, and monitor service progress across customer reports
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label htmlFor="statusFilter" style={{ fontWeight: 600, fontSize: '0.88rem' }}>
-              Filter Status:
-            </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="🔍 Filter complaints..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', width: '180px' }}
+            />
             <select
               id="statusFilter"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ width: 'auto', padding: '0.4rem 0.75rem', fontSize: '0.88rem' }}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                playHapticSound('click');
+              }}
+              style={{ width: 'auto', padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
             >
               <option value="">All Statuses</option>
               <option value="pending">Pending</option>
@@ -147,6 +203,10 @@ export default function AdminDashboard() {
 
         {loading ? (
           <p>Loading complaints...</p>
+        ) : filteredComplaints.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+            No complaints found matching current filters.
+          </div>
         ) : (
           <div className="table-wrap">
             <table>
@@ -161,19 +221,19 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {complaints.map((c) => (
+                {filteredComplaints.map((c) => (
                   <tr key={c._id}>
                     <td>
                       <strong>{c.customerId?.name}</strong>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                         {c.customerId?.email}
                       </div>
                     </td>
                     <td>
                       <strong style={{ textTransform: 'capitalize' }}>{c.problemType.replace(/_/g, ' ')}</strong>
-                      <div style={{ fontSize: '0.84rem', color: '#334155' }}>{c.description}</div>
+                      <div style={{ fontSize: '0.84rem' }}>{c.description}</div>
                       {c.address && (
-                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>📍 {c.address}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>📍 {c.address}</div>
                       )}
                     </td>
                     <td>
@@ -186,13 +246,18 @@ export default function AdminDashboard() {
                         <div>
                           <strong>{c.technicianId.name}</strong>
                           <div>
-                            <span className="tech-id-badge" style={{ fontSize: '0.74rem', padding: '0.15rem 0.45rem', marginTop: '0.2rem' }}>
+                            <span
+                              className="tech-id-badge"
+                              style={{ fontSize: '0.74rem', padding: '0.15rem 0.45rem', marginTop: '0.2rem', cursor: 'pointer' }}
+                              onClick={() => copyToClipboard(c.technicianId.technicianBadgeId)}
+                              title="Click to copy ID"
+                            >
                               🪪 {c.technicianId.technicianBadgeId || 'EB-TECH'}
                             </span>
                           </div>
                         </div>
                       ) : (
-                        <span style={{ color: '#64748b', fontStyle: 'italic', fontSize: '0.85rem' }}>Unassigned</span>
+                        <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem' }}>Unassigned</span>
                       )}
                     </td>
                     <td>
@@ -217,7 +282,7 @@ export default function AdminDashboard() {
                           })}
                         </select>
                       ) : (
-                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Locked ({c.status})</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Locked ({c.status})</span>
                       )}
                     </td>
                     <td>
@@ -233,16 +298,26 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* User & Technician Monitoring Directory (Requirement 4) */}
-      <div className="card" style={{ boxShadow: 'var(--shadow-md)' }}>
+      {/* User & Technician Monitoring Directory */}
+      <div className="card" style={{ boxShadow: 'var(--card-shadow)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div>
             <h3 style={{ marginTop: 0, marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>👥</span> User & Technician Directory ({users.length})
+              <span>👥</span> User & Technician Directory ({filteredUsers.length} of {users.length})
             </h3>
             <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
               Technician Badge IDs for Field Monitoring, Logging, and Audit compliance
             </span>
+          </div>
+
+          <div>
+            <input
+              type="text"
+              placeholder="🔍 Search users..."
+              value={userQuery}
+              onChange={(e) => setUserQuery(e.target.value)}
+              style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', width: '180px' }}
+            />
           </div>
         </div>
 
@@ -259,7 +334,7 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => {
+              {filteredUsers.map((u) => {
                 const badge =
                   u.technicianBadgeId ||
                   (u.role === 'technician' ? `EB-TECH-${u._id.toString().slice(-4).toUpperCase()}` : null);
@@ -271,7 +346,7 @@ export default function AdminDashboard() {
                     </td>
                     <td>
                       <div>{u.email}</div>
-                      {u.phone && <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{u.phone}</div>}
+                      {u.phone && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>{u.phone}</div>}
                     </td>
                     <td>
                       <span className={`badge ${u.role === 'admin' ? 'badge-assigned' : u.role === 'technician' ? 'badge-on_the_way' : 'badge-resolved'}`}>
@@ -280,15 +355,20 @@ export default function AdminDashboard() {
                     </td>
                     <td>
                       {badge ? (
-                        <span className="tech-id-badge" title="Official Field Technician ID for Logging & Monitoring">
+                        <span
+                          className="tech-id-badge"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => copyToClipboard(badge)}
+                          title="Click to copy ID"
+                        >
                           🪪 {badge}
                         </span>
                       ) : (
-                        <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>—</span>
+                        <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>—</span>
                       )}
                     </td>
                     <td>
-                      <strong style={{ color: u.isActive ? '#15803d' : '#dc2626', fontSize: '0.85rem' }}>
+                      <strong style={{ color: u.isActive ? 'var(--success)' : 'var(--danger)', fontSize: '0.85rem' }}>
                         {u.isActive ? 'Active' : 'Deactivated'}
                       </strong>
                     </td>

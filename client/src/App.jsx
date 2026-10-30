@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import Navbar from './components/Navbar.jsx';
 import SafetyBanner from './components/SafetyBanner.jsx';
+import GridTicker from './components/GridTicker.jsx';
+import InteractiveGridBackground from './components/InteractiveGridBackground.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
@@ -17,7 +19,9 @@ function ProtectedRoute({ allowedRoles, children }) {
   if (loading) {
     return (
       <div className="container">
-        <div className="card">Verifying session...</div>
+        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+          <span className="spinner-mini"></span> Verifying secure session...
+        </div>
       </div>
     );
   }
@@ -35,52 +39,59 @@ function ProtectedRoute({ allowedRoles, children }) {
 
 export default function App() {
   return (
-    <div>
+    <div className="app-root">
+      {/* Living Interactive Electrical Grid Canvas (Non-Plain Background) */}
+      <InteractiveGridBackground />
+
       <SafetyBanner />
       <Navbar />
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+      <GridTicker />
 
-        <Route
-          path="/customer"
-          element={
-            <ProtectedRoute allowedRoles={['customer']}>
-              <CustomerDashboard />
-            </ProtectedRoute>
-          }
-        />
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
-        <Route
-          path="/technician"
-          element={
-            <ProtectedRoute allowedRoles={['technician']}>
-              <TechnicianDashboard />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/customer"
+            element={
+              <ProtectedRoute allowedRoles={['customer']}>
+                <CustomerDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute allowedRoles={['admin']}>
-              <AdminDashboard />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/technician"
+            element={
+              <ProtectedRoute allowedRoles={['technician']}>
+                <TechnicianDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/complaints/:id"
-          element={
-            <ProtectedRoute allowedRoles={['customer', 'technician', 'admin']}>
-              <ComplaintDetailPage />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route
+            path="/complaints/:id"
+            element={
+              <ProtectedRoute allowedRoles={['customer', 'technician', 'admin']}>
+                <ComplaintDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
     </div>
   );
 }

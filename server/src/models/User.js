@@ -32,6 +32,12 @@ const userSchema = new mongoose.Schema(
       default: 'customer',
       required: true
     },
+    technicianBadgeId: {
+      type: String,
+      trim: true,
+      sparse: true,
+      default: undefined
+    },
     isActive: {
       type: Boolean,
       default: true

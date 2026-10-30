@@ -11,24 +11,74 @@ export default function Navbar() {
     navigate('/login');
   }
 
+  const roleColors = {
+    customer: { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0', label: '👤 CUSTOMER' },
+    technician: { bg: '#eff6ff', text: '#1e40af', border: '#93c5fd', label: '🛠️ TECHNICIAN' },
+    admin: { bg: '#faf5ff', text: '#6b21a8', border: '#e9d5ff', label: '🛡️ ADMINISTRATOR' }
+  };
+
+  const currentRoleStyle = user?.role ? roleColors[user.role] : null;
+
   return (
     <header className="navbar">
       <Link to="/" className="navbar-brand">
-        ⚡ Smart EB Connect
+        <span className="brand-icon-glow">⚡</span>
+        <span>Smart EB Connect</span>
       </Link>
+
       <nav className="navbar-links">
         {!user ? (
           <>
-            <Link to="/login">Login</Link>
-            <Link to="/register">Register</Link>
+            <Link to="/" className="nav-link">
+              Home
+            </Link>
+            <Link to="/login" className="btn btn-secondary" style={{ padding: '0.45rem 0.95rem' }}>
+              Sign In
+            </Link>
+            <Link to="/register" className="btn" style={{ padding: '0.45rem 0.95rem' }}>
+              Get Started
+            </Link>
           </>
         ) : (
           <>
-            <Link to={`/${user.role}`}>Dashboard ({user.role.toUpperCase()})</Link>
-            <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
-              {user.name} ({user.email})
-            </span>
-            <button className="btn btn-secondary" onClick={handleLogout}>
+            <Link to={`/${user.role}`} className="nav-link" style={{ fontWeight: 600 }}>
+              Dashboard
+            </Link>
+
+            {/* Role & User Badge */}
+            {currentRoleStyle && (
+              <span
+                style={{
+                  background: currentRoleStyle.bg,
+                  color: currentRoleStyle.text,
+                  border: `1px solid ${currentRoleStyle.border}`,
+                  padding: '0.3rem 0.65rem',
+                  borderRadius: '999px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.03em'
+                }}
+              >
+                {currentRoleStyle.label}
+              </span>
+            )}
+
+            {/* Prominent Technician ID Badge for field logging */}
+            {user.role === 'technician' && user.technicianBadgeId && (
+              <span className="tech-id-badge" title="Your Field Technician ID">
+                🪪 {user.technicianBadgeId}
+              </span>
+            )}
+
+            <div className="user-tag">
+              <span>{user.name}</span>
+            </div>
+
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+              onClick={handleLogout}
+            >
               Logout
             </button>
           </>

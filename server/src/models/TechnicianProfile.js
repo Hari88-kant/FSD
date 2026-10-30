@@ -33,6 +33,12 @@ const technicianProfileSchema = new mongoose.Schema(
       required: true,
       unique: true
     },
+    technicianBadgeId: {
+      type: String,
+      trim: true,
+      sparse: true,
+      default: undefined
+    },
     skills: {
       type: [String],
       default: ['general_fault', 'meter_issue', 'power_outage', 'voltage_fluctuation']

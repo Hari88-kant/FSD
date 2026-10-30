@@ -11,7 +11,7 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('customer');
-  const [serviceArea, setServiceArea] = useState('Electronic City, Anekal');
+  const [serviceArea, setServiceArea] = useState('Electronic City, Anekal, Jigani');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -45,14 +45,22 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: '540px' }}>
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>Create an Account</h2>
-        <p style={{ fontSize: '0.88rem', color: '#475569' }}>
-          Register as a Customer or Technician. Administrator accounts are provisioned exclusively via
-          controlled server seeding.
-        </p>
-        {error && <div className="hazard-alert">{error}</div>}
+    <div className="container" style={{ maxWidth: '520px', marginTop: '1.5rem' }}>
+      <div className="card" style={{ padding: '2rem', boxShadow: 'var(--shadow-lg)' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <span className="brand-icon-glow" style={{ fontSize: '1.8rem', display: 'inline-block', marginBottom: '0.75rem' }}>⚡</span>
+          <h2 style={{ margin: '0 0 0.35rem 0', letterSpacing: '-0.02em' }}>Create an Account</h2>
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.92rem' }}>
+            Register as a Customer or Field Technician
+          </p>
+        </div>
+
+        {error && (
+          <div className="hazard-alert" style={{ fontSize: '0.9rem', padding: '0.75rem 1rem' }}>
+            <span>⚠️</span>
+            <div>{error}</div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -63,7 +71,7 @@ export default function RegisterPage() {
               minLength={2}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your full name"
+              placeholder="e.g. Ramesh Kumar"
             />
           </div>
 
@@ -92,25 +100,30 @@ export default function RegisterPage() {
           <div className="form-group">
             <label htmlFor="role">Account Role</label>
             <select id="role" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="customer">Customer (Report Faults & Track Status)</option>
-              <option value="technician">Technician (Accept & Resolve Requests)</option>
+              <option value="customer">👤 Customer (Report Faults & Track Resolution)</option>
+              <option value="technician">🛠️ Field Technician (Accept/Reject & Fix Faults)</option>
             </select>
           </div>
 
           {role === 'technician' && (
-            <div className="form-group">
-              <label htmlFor="serviceArea">Service Areas (comma-separated)</label>
+            <div className="form-group" style={{ background: '#eff6ff', padding: '0.85rem', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+              <label htmlFor="serviceArea" style={{ color: '#1e40af' }}>
+                Service Areas (Comma-separated)
+              </label>
               <input
                 id="serviceArea"
                 value={serviceArea}
                 onChange={(e) => setServiceArea(e.target.value)}
-                placeholder="Electronic City, Chandapura, Anekal"
+                placeholder="Anekal, Electronic City, Chandapura, Jigani"
               />
+              <span style={{ fontSize: '0.78rem', color: '#3b82f6', display: 'block', marginTop: '0.35rem' }}>
+                ℹ️ A unique Employee ID (e.g. <code>EB-TECH-XXXX</code>) will be generated for monitoring.
+              </span>
             </div>
           )}
 
           <div className="form-group">
-            <label htmlFor="reg-password">Password (min 6 characters)</label>
+            <label htmlFor="reg-password">Password (minimum 6 characters)</label>
             <input
               id="reg-password"
               type="password"
@@ -121,13 +134,13 @@ export default function RegisterPage() {
             />
           </div>
 
-          <button type="submit" className="btn" disabled={submitting} style={{ width: '100%' }}>
-            {submitting ? 'Creating Account...' : 'Register'}
+          <button type="submit" className="btn" disabled={submitting} style={{ width: '100%', padding: '0.75rem', marginTop: '0.5rem' }}>
+            {submitting ? 'Registering Account...' : 'Complete Registration →'}
           </button>
         </form>
 
-        <p style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
-          Already registered? <Link to="/login">Sign in</Link>
+        <p style={{ marginTop: '1.5rem', marginBottom: 0, fontSize: '0.9rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          Already have an account? <Link to="/login" style={{ fontWeight: 600 }}>Sign in here</Link>
         </p>
       </div>
     </div>

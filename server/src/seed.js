@@ -47,7 +47,7 @@ async function seedDatabase() {
       }
     ]);
 
-    // 3. Create Technicians with sample coordinates around Bengaluru / Electronic City / Anekal
+    // 3. Create Technicians with human-readable IDs and sample coordinates
     const [tech1, tech2, tech3] = await User.create([
       {
         name: 'Karthik Murthy (Line Tech)',
@@ -55,6 +55,7 @@ async function seedDatabase() {
         phone: '+91-9900112233',
         passwordHash,
         role: 'technician',
+        technicianBadgeId: 'EB-TECH-1001',
         isActive: true
       },
       {
@@ -63,6 +64,7 @@ async function seedDatabase() {
         phone: '+91-9900445566',
         passwordHash,
         role: 'technician',
+        technicianBadgeId: 'EB-TECH-1002',
         isActive: true
       },
       {
@@ -71,6 +73,7 @@ async function seedDatabase() {
         phone: '+91-9900778899',
         passwordHash,
         role: 'technician',
+        technicianBadgeId: 'EB-TECH-1003',
         isActive: true
       }
     ]);
@@ -78,6 +81,7 @@ async function seedDatabase() {
     await TechnicianProfile.create([
       {
         userId: tech1._id,
+        technicianBadgeId: 'EB-TECH-1001',
         skills: ['power_outage', 'fuse_blown', 'voltage_fluctuation'],
         serviceAreas: ['Electronic City', 'Chandapura', 'Anekal'],
         isAvailable: true,
@@ -88,6 +92,7 @@ async function seedDatabase() {
       },
       {
         userId: tech2._id,
+        technicianBadgeId: 'EB-TECH-1002',
         skills: ['power_outage', 'meter_fault', 'sparking_or_exposed_wire'],
         serviceAreas: ['Anekal Town', 'Attibele', 'Jigani'],
         isAvailable: true,
@@ -98,6 +103,7 @@ async function seedDatabase() {
       },
       {
         userId: tech3._id,
+        technicianBadgeId: 'EB-TECH-1003',
         skills: ['meter_fault', 'billing_or_connection', 'voltage_fluctuation'],
         serviceAreas: ['HSR Layout', 'Koramangala', 'Bommanahalli'],
         isAvailable: true,
@@ -144,12 +150,12 @@ async function seedDatabase() {
           {
             status: 'assigned',
             changedBy: admin._id,
-            note: 'Assigned to Karthik Murthy'
+            note: 'Assigned to Karthik Murthy (EB-TECH-1001)'
           },
           {
             status: 'accepted',
             changedBy: tech1._id,
-            note: 'Accepted by technician'
+            note: 'Technician Karthik Murthy (EB-TECH-1001) confirmed availability and accepted request'
           }
         ]
       },
@@ -171,7 +177,7 @@ async function seedDatabase() {
           {
             status: 'accepted',
             changedBy: tech2._id,
-            note: 'Technician accepted'
+            note: 'Technician accepted (EB-TECH-1002)'
           },
           {
             status: 'on_the_way',
@@ -199,9 +205,9 @@ async function seedDatabase() {
     console.log('  Admin      : admin@smarteb.local');
     console.log('  Customer 1 : ananya@smarteb.local');
     console.log('  Customer 2 : rohan@smarteb.local');
-    console.log('  Tech 1     : karthik.tech@smarteb.local (Electronic City)');
-    console.log('  Tech 2     : suresh.tech@smarteb.local (Anekal)');
-    console.log('  Tech 3     : prashanth.tech@smarteb.local (HSR Layout)');
+    console.log('  Tech 1     : karthik.tech@smarteb.local [EB-TECH-1001] (Electronic City)');
+    console.log('  Tech 2     : suresh.tech@smarteb.local [EB-TECH-1002] (Anekal)');
+    console.log('  Tech 3     : prashanth.tech@smarteb.local [EB-TECH-1003] (HSR Layout)');
     console.log('============================================================\n');
 
     await mongoose.disconnect();

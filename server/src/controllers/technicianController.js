@@ -36,7 +36,7 @@ export async function getNearbyTechnicians(req, res, next) {
 
     const profiles = await TechnicianProfile.find(filter).populate(
       'userId',
-      'name email phone isActive role'
+      'name email phone isActive role technicianBadgeId'
     );
 
     const activeProfiles = profiles.filter((p) => p.userId && p.userId.isActive);
@@ -51,8 +51,14 @@ export async function getNearbyTechnicians(req, res, next) {
           distanceKm = calculateHaversineKm(lat, lng, techLat, techLng);
         }
 
+        const badgeId =
+          profile.technicianBadgeId ||
+          profile.userId.technicianBadgeId ||
+          `EB-TECH-${profile.userId._id.toString().slice(-4).toUpperCase()}`;
+
         return {
           technicianId: profile.userId._id,
+          technicianBadgeId: badgeId,
           name: profile.userId.name,
           phone: profile.userId.phone,
           skills: profile.skills,
@@ -96,10 +102,14 @@ export async function updateAvailability(req, res, next) {
     if (!profile) {
       profile = await TechnicianProfile.create({
         userId: req.user.id,
+        technicianBadgeId: req.user.technicianBadgeId,
         isAvailable
       });
     } else {
       profile.isAvailable = isAvailable;
+      if (!profile.technicianBadgeId && req.user.technicianBadgeId) {
+        profile.technicianBadgeId = req.user.technicianBadgeId;
+      }
       await profile.save();
     }
 
@@ -118,12 +128,14 @@ export async function updateLocation(req, res, next) {
       throw new AppError(404, 'PROFILE_NOT_FOUND', 'Technician profile not found');
     }
 
-    // Store in GeoJSON [longitude, latitude] order per Section 9
     profile.location = {
       type: 'Point',
       coordinates: [lng, lat]
     };
     profile.lastLocationAt = new Date();
+    if (!profile.technicianBadgeId && req.user.technicianBadgeId) {
+      profile.technicianBadgeId = req.user.technicianBadgeId;
+    }
     await profile.save();
 
     return sendSuccess(res, {

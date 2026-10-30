@@ -8,7 +8,8 @@ export const adminUpdateUserSchema = z.object({
   isActive: z.boolean().optional(),
   role: z.enum(['customer', 'technician', 'admin']).optional(),
   name: z.string().trim().min(2).max(100).optional(),
-  phone: z.string().trim().optional()
+  phone: z.string().trim().optional(),
+  technicianBadgeId: z.string().trim().optional()
 });
 
 export async function getAdminSummary(req, res, next) {
@@ -36,8 +37,20 @@ export async function getAdminSummary(req, res, next) {
       Complaint.countDocuments({ status: 'resolved' }),
       Complaint.countDocuments({ status: 'cancelled' }),
       User.find().sort({ createdAt: -1 }).limit(100),
-      TechnicianProfile.find().populate('userId', 'name email phone isActive')
+      TechnicianProfile.find().populate('userId', 'name email phone isActive role technicianBadgeId')
     ]);
+
+    const formattedTechs = technicianProfiles.map((tp) => {
+      const u = tp.userId;
+      const badgeId =
+        tp.technicianBadgeId ||
+        u?.technicianBadgeId ||
+        (u ? `EB-TECH-${u._id.toString().slice(-4).toUpperCase()}` : undefined);
+      return {
+        ...tp.toObject(),
+        technicianBadgeId: badgeId
+      };
+    });
 
     return sendSuccess(res, {
       counts: {
@@ -52,7 +65,7 @@ export async function getAdminSummary(req, res, next) {
         cancelledComplaints
       },
       users,
-      technicians: technicianProfiles
+      technicians: formattedTechs
     });
   } catch (err) {
     next(err);
@@ -61,7 +74,7 @@ export async function getAdminSummary(req, res, next) {
 
 export async function updateUserByAdmin(req, res, next) {
   try {
-    const { isActive, role, name, phone } = req.body;
+    const { isActive, role, name, phone, technicianBadgeId } = req.body;
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -76,13 +89,25 @@ export async function updateUserByAdmin(req, res, next) {
     if (role) user.role = role;
     if (name) user.name = name;
     if (phone !== undefined) user.phone = phone;
+    if (technicianBadgeId !== undefined) user.technicianBadgeId = technicianBadgeId;
+
+    if (user.role === 'technician' && !user.technicianBadgeId) {
+      user.technicianBadgeId = `EB-TECH-${user._id.toString().slice(-4).toUpperCase()}`;
+    }
 
     await user.save();
 
     if (user.role === 'technician') {
-      const existingProfile = await TechnicianProfile.findOne({ userId: user._id });
+      let existingProfile = await TechnicianProfile.findOne({ userId: user._id });
       if (!existingProfile) {
-        await TechnicianProfile.create({ userId: user._id, isAvailable: true });
+        await TechnicianProfile.create({
+          userId: user._id,
+          technicianBadgeId: user.technicianBadgeId,
+          isAvailable: true
+        });
+      } else if (!existingProfile.technicianBadgeId) {
+        existingProfile.technicianBadgeId = user.technicianBadgeId;
+        await existingProfile.save();
       }
     }
 

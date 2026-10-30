@@ -11,7 +11,6 @@ export const registerSchema = z.object({
   email: z.string().trim().email('Valid email address is required').toLowerCase(),
   phone: z.string().trim().optional().default(''),
   password: z.string().min(6, 'Password must be at least 6 characters').max(100),
-  // Public registration strictly disallows 'admin' per Section 9 & FR-01
   role: z.enum(['customer', 'technician']).optional().default('customer'),
   skills: z.array(z.string()).optional(),
   serviceAreas: z.array(z.string()).optional(),
@@ -46,18 +45,25 @@ export async function register(req, res, next) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const badgeId =
+      role === 'technician'
+        ? `EB-TECH-${Math.floor(1000 + Math.random() * 9000)}`
+        : undefined;
+
     const user = await User.create({
       name,
       email,
       phone,
       passwordHash,
-      role
+      role,
+      technicianBadgeId: badgeId
     });
 
     let technicianProfile = null;
     if (role === 'technician') {
       const profileData = {
         userId: user._id,
+        technicianBadgeId: badgeId,
         skills: skills?.length
           ? skills
           : ['power_outage', 'voltage_fluctuation', 'meter_fault', 'fuse_blown'],
@@ -86,6 +92,7 @@ export async function register(req, res, next) {
           email: user.email,
           phone: user.phone,
           role: user.role,
+          technicianBadgeId: user.technicianBadgeId || badgeId,
           isActive: user.isActive
         },
         technicianProfile
@@ -117,8 +124,16 @@ export async function login(req, res, next) {
 
     const token = signToken(user);
     let technicianProfile = null;
+    let badgeId = user.technicianBadgeId;
+
     if (user.role === 'technician') {
       technicianProfile = await TechnicianProfile.findOne({ userId: user._id });
+      if (!badgeId && technicianProfile?.technicianBadgeId) {
+        badgeId = technicianProfile.technicianBadgeId;
+      }
+      if (!badgeId) {
+        badgeId = `EB-TECH-${user._id.toString().slice(-4).toUpperCase()}`;
+      }
     }
 
     return sendSuccess(res, {
@@ -129,6 +144,7 @@ export async function login(req, res, next) {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        technicianBadgeId: badgeId,
         isActive: user.isActive
       },
       technicianProfile
@@ -141,11 +157,22 @@ export async function login(req, res, next) {
 export async function getMe(req, res, next) {
   try {
     let technicianProfile = null;
+    let badgeId = req.user.technicianBadgeId;
+
     if (req.user.role === 'technician') {
       technicianProfile = await TechnicianProfile.findOne({ userId: req.user.id });
+      if (!badgeId && technicianProfile?.technicianBadgeId) {
+        badgeId = technicianProfile.technicianBadgeId;
+      }
+      if (!badgeId) {
+        badgeId = `EB-TECH-${req.user.id.slice(-4).toUpperCase()}`;
+      }
     }
     return sendSuccess(res, {
-      user: req.user,
+      user: {
+        ...req.user,
+        technicianBadgeId: badgeId
+      },
       technicianProfile
     });
   } catch (err) {

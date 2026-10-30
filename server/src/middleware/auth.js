@@ -37,12 +37,17 @@ export async function authenticate(req, res, next) {
       throw new AppError(403, 'ACCOUNT_INACTIVE', 'User account is inactive or no longer exists');
     }
 
+    const badgeId =
+      user.technicianBadgeId ||
+      (user.role === 'technician' ? `EB-TECH-${user._id.toString().slice(-4).toUpperCase()}` : undefined);
+
     req.user = {
       id: user._id.toString(),
       name: user.name,
       email: user.email,
       role: user.role,
       phone: user.phone,
+      technicianBadgeId: badgeId,
       isActive: user.isActive
     };
 

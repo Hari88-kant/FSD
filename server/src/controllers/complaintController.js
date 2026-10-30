@@ -59,7 +59,6 @@ export async function createComplaint(req, res, next) {
     };
 
     if (typeof lat === 'number' && typeof lng === 'number') {
-      // MongoDB GeoJSON stores [longitude, latitude]
       doc.location = {
         type: 'Point',
         coordinates: [lng, lat]
@@ -69,7 +68,7 @@ export async function createComplaint(req, res, next) {
     const complaint = await Complaint.create(doc);
     const populated = await Complaint.findById(complaint._id)
       .populate('customerId', 'name email phone')
-      .populate('technicianId', 'name email phone');
+      .populate('technicianId', 'name email phone role technicianBadgeId');
 
     return sendSuccess(
       res,
@@ -94,7 +93,6 @@ export async function listComplaints(req, res, next) {
     if (req.user.role === 'customer') {
       filter.customerId = req.user.id;
     } else if (req.user.role === 'technician') {
-      // Technicians see complaints assigned to them OR eligible pending complaints
       filter.$or = [{ technicianId: req.user.id }, { status: 'pending', technicianId: null }];
     }
 
@@ -107,7 +105,7 @@ export async function listComplaints(req, res, next) {
     const [complaints, total] = await Promise.all([
       Complaint.find(filter)
         .populate('customerId', 'name email phone')
-        .populate('technicianId', 'name email phone')
+        .populate('technicianId', 'name email phone role technicianBadgeId')
         .sort({ createdAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum),
@@ -132,8 +130,8 @@ export async function getComplaintById(req, res, next) {
   try {
     const complaint = await Complaint.findById(req.params.id)
       .populate('customerId', 'name email phone')
-      .populate('technicianId', 'name email phone')
-      .populate('statusHistory.changedBy', 'name role');
+      .populate('technicianId', 'name email phone role technicianBadgeId')
+      .populate('statusHistory.changedBy', 'name role technicianBadgeId');
 
     if (!complaint) {
       throw new AppError(404, 'COMPLAINT_NOT_FOUND', 'Complaint not found');
@@ -202,10 +200,11 @@ export async function updateComplaint(req, res, next) {
         );
       }
       complaint.status = status;
+      const techBadge = req.user.technicianBadgeId ? ` [${req.user.technicianBadgeId}]` : '';
       complaint.statusHistory.push({
         status,
         changedBy: req.user.id,
-        note: note || `Status updated to ${status} by technician`
+        note: note || `Status updated to ${status.replace(/_/g, ' ')} by technician ${req.user.name}${techBadge}`
       });
     } else if (req.user.role === 'admin') {
       if (status) {
@@ -213,7 +212,7 @@ export async function updateComplaint(req, res, next) {
         complaint.statusHistory.push({
           status,
           changedBy: req.user.id,
-          note: note || `Admin updated status to ${status}`
+          note: note || `Admin updated status to ${status.replace(/_/g, ' ')}`
         });
       }
       if (description) complaint.description = description;
@@ -223,7 +222,7 @@ export async function updateComplaint(req, res, next) {
     await complaint.save();
     const updated = await Complaint.findById(complaint._id)
       .populate('customerId', 'name email phone')
-      .populate('technicianId', 'name email phone');
+      .populate('technicianId', 'name email phone role technicianBadgeId');
 
     return sendSuccess(res, { complaint: updated });
   } catch (err) {
@@ -304,24 +303,28 @@ export async function assignComplaint(req, res, next) {
       throw new AppError(400, 'TECHNICIAN_UNAVAILABLE', 'Selected technician is currently unavailable');
     }
 
-    // Customer can also trigger assignment of nearest available technician on their own pending complaint
     const isOwner = complaint.customerId.toString() === req.user.id;
     if (req.user.role !== 'admin' && !isOwner) {
       throw new AppError(403, 'FORBIDDEN', 'Only an admin or the complaint owner can request technician assignment');
     }
+
+    const techBadge =
+      techUser.technicianBadgeId ||
+      techProfile?.technicianBadgeId ||
+      `EB-TECH-${techUser._id.toString().slice(-4).toUpperCase()}`;
 
     complaint.technicianId = techUser._id;
     complaint.status = 'assigned';
     complaint.statusHistory.push({
       status: 'assigned',
       changedBy: req.user.id,
-      note: `Assigned to technician ${techUser.name}`
+      note: `Assigned to technician ${techUser.name} (${techBadge})`
     });
 
     await complaint.save();
     const updated = await Complaint.findById(complaint._id)
       .populate('customerId', 'name email phone')
-      .populate('technicianId', 'name email phone');
+      .populate('technicianId', 'name email phone role technicianBadgeId');
 
     return sendSuccess(res, { complaint: updated });
   } catch (err) {
@@ -336,8 +339,7 @@ export async function acceptComplaint(req, res, next) {
       throw new AppError(404, 'COMPLAINT_NOT_FOUND', 'Complaint not found');
     }
 
-    // Prevent double acceptance with server-side checks (FR-09)
-    if ( ['accepted', 'on_the_way', 'in_progress', 'resolved'].includes(complaint.status)) {
+    if (['accepted', 'on_the_way', 'in_progress', 'resolved'].includes(complaint.status)) {
       throw new AppError(409, 'ALREADY_ACCEPTED', 'This complaint has already been accepted');
     }
 
@@ -348,18 +350,20 @@ export async function acceptComplaint(req, res, next) {
       throw new AppError(403, 'NOT_ASSIGNED_TO_YOU', 'This complaint is assigned to another technician');
     }
 
+    const techBadge = req.user.technicianBadgeId || `EB-TECH-${req.user.id.slice(-4).toUpperCase()}`;
+
     complaint.technicianId = req.user.id;
     complaint.status = 'accepted';
     complaint.statusHistory.push({
       status: 'accepted',
       changedBy: req.user.id,
-      note: 'Technician accepted the service request'
+      note: `Technician ${req.user.name} (${techBadge}) confirmed availability and accepted the service request`
     });
 
     await complaint.save();
     const updated = await Complaint.findById(complaint._id)
       .populate('customerId', 'name email phone')
-      .populate('technicianId', 'name email phone');
+      .populate('technicianId', 'name email phone role technicianBadgeId');
 
     return sendSuccess(res, { complaint: updated });
   } catch (err) {
@@ -386,21 +390,23 @@ export async function rejectComplaint(req, res, next) {
       );
     }
 
-    // Return complaint to reassignable pending state per Section 11
+    const techBadge = req.user.technicianBadgeId || `EB-TECH-${req.user.id.slice(-4).toUpperCase()}`;
+    const reason = req.body?.reason || req.body?.note || 'Occupied on another emergency repair / shift ended';
+
     complaint.status = 'pending';
     complaint.technicianId = null;
     complaint.statusHistory.push({
       status: 'rejected',
       changedBy: req.user.id,
-      note: req.body?.note || 'Technician rejected assignment; returned to pending queue for reassignment'
+      note: `Technician ${req.user.name} (${techBadge}) declined request: "${reason}". Returned to pending dispatch queue for reassignment.`
     });
 
     await complaint.save();
     const updated = await Complaint.findById(complaint._id)
       .populate('customerId', 'name email phone')
-      .populate('technicianId', 'name email phone');
+      .populate('technicianId', 'name email phone role technicianBadgeId');
 
-    return sendSuccess(res, { complaint: updated });
+    return sendSuccess(res, { complaint: updated, rejectionReason: reason });
   } catch (err) {
     next(err);
   }
